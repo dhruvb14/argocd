@@ -35,12 +35,14 @@ spec:
           httpGet:
             path: /identity
             port: 32400
+            scheme: HTTPS
           initialDelaySeconds: 60
           timeoutSeconds: 30
         livenessProbe:
           httpGet:
             path: /identity
             port: 32400
+            scheme: HTTPS
           initialDelaySeconds: 60
           timeoutSeconds: 30
         env:
@@ -49,7 +51,7 @@ spec:
         - name: GUID
           value: "100"
         - name: ADVERTISE_IP 
-          value: "http://192.168.100.84:32400"
+          value: "https://192.168.100.84:32400"
         - name: TZ
           value: "America/NYC"
         - name: ALLOWED_NETWORKS
@@ -70,9 +72,6 @@ spec:
         - containerPort: 5353
           name: discovery-udp
           protocol: UDP
-        - containerPort: 8324
-          name: plex-roku
-          protocol: TCP
         - containerPort: 32410
           name: gdm-32410
           protocol: UDP
