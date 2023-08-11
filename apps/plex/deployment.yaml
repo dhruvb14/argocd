@@ -113,8 +113,4 @@ spec:
       - name: plex-config
         persistentVolumeClaim:
           claimName: plex-config-pvc
-      # tolerations:
-      # - key: "nvidia.com/gpu"
-      #   operator: "Exists"
-      #   effect: "NoSchedule"
       
