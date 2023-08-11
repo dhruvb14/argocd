@@ -1,0 +1,120 @@
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: plex-deployment
+  namespace: plex
+  labels:
+    app: plex
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+    spec:
+      containers:
+      - name: plex
+        image:  ghcr.io/linuxserver/plex:latest
+        imagePullPolicy: Always
+        resources:
+          limits:
+            gpu.intel.com/i915: "1" 
+            cpu: "2500m"
+            memory: "4096Mi"
+          requests:
+            gpu.intel.com/i915: "1" 
+            cpu: "1000m"
+            memory: "1024Mi"
+        readinessProbe:
+          httpGet:
+            path: /identity
+            port: 32400
+          initialDelaySeconds: 60
+          timeoutSeconds: 30
+        livenessProbe:
+          httpGet:
+            path: /identity
+            port: 32400
+          initialDelaySeconds: 60
+          timeoutSeconds: 30
+        env:
+        - name: PUID
+          value: "1026"
+        - name: GUID
+          value: "100"
+        - name: ADVERTISE_IP 
+          value: "http://192.168.100.84:32400"
+        - name: TZ
+          value: "America/NYC"
+        - name: ALLOWED_NETWORKS
+          value: "192.168.0.0/16,10.0.0.0/8"
+        ports:
+        - containerPort: 32400     # < required network portnumber. See https://hub.docker.com/r/linuxserver/plex
+          name: pms-web            # < reference name from the port in the service yaml
+          protocol: TCP
+        - containerPort: 32469
+          name: dlna-tcp
+          protocol: TCP
+        - containerPort: 1900
+          name: dlna-udp
+          protocol: UDP
+        - containerPort: 3005
+          name: plex-companion
+          protocol: TCP
+        - containerPort: 5353
+          name: discovery-udp
+          protocol: UDP
+        - containerPort: 8324
+          name: plex-roku
+          protocol: TCP
+        - containerPort: 32410
+          name: gdm-32410
+          protocol: UDP
+        - containerPort: 32412
+          name: gdm-32412
+          protocol: UDP
+        - containerPort: 32413
+          name: gdm-32413
+          protocol: UDP
+        - containerPort: 32414
+          name: gdm-32414
+          protocol: UDP
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: "/config"
+          name: plex-config
+        - mountPath: /movies
+          name: movies
+        - mountPath: /tv
+          name: tv
+      # dnsConfig:
+      #   options:
+      #     - name: ndots
+      #       value: "1"
+      # nodeName: cs1
+      volumes:
+      - name: movies
+        nfs:
+          server: 192.168.1.10
+          path: /volume2/Movies
+          readOnly: true
+      - name: tv
+        nfs:
+          server: 192.168.1.10
+          path: /volume2/TV
+          readOnly: true
+      - name: plex-config
+        persistentVolumeClaim:
+          claimName: plex-config-pvc
+      # tolerations:
+      # - key: "nvidia.com/gpu"
+      #   operator: "Exists"
+      #   effect: "NoSchedule"
+      
