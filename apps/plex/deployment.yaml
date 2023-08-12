@@ -37,14 +37,14 @@ spec:
             port: 32400
             scheme: HTTPS
           initialDelaySeconds: 60
-          timeoutSeconds: 30
+          timeoutSeconds: 60
         livenessProbe:
           httpGet:
             path: /identity
             port: 32400
             scheme: HTTPS
           initialDelaySeconds: 60
-          timeoutSeconds: 30
+          timeoutSeconds: 60
         env:
         - name: PUID
           value: "1026"
