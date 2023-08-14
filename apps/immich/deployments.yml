@@ -1,0 +1,467 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+  creationTimestamp: null
+  name: immich-backup
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich-backup
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-backup
+    spec:
+      containers:
+        - env:
+            - name: BACKUP_DIR
+              value: "/db_dumps"
+            - name: BACKUP_NUM_KEEP
+              value: "7"
+            - name: POSTGRES_DB
+              value: "immich"
+            - name: POSTGRES_HOST
+              value: "immich-database.immich.svc:5432"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: password
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: SCHEDULE
+              value: '@hourly'
+          image: prodrigestivill/postgres-backup-local
+          name: immich-db-dumper
+          resources: {}
+          volumeMounts:
+            - mountPath: /db_dumps
+              name: backup-claim
+      restartPolicy: Always
+      volumes:
+        - name: backup-claim
+          persistentVolumeClaim:
+            claimName: backup-claim
+status: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  name: immich-database
+  namespace: immich
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-database
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-database
+    spec:
+      containers:
+        - env:
+            - name: PG_DATA
+              value: "/var/lib/postgresql/data"
+            - name: POSTGRES_DB
+              value: "immich"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: password
+            - name: POSTGRES_USER
+              value: "postgres"
+          ports:
+            - containerPort: 5432
+              name: dbport
+              protocol: TCP
+          image: postgres:14-alpine@sha256:28407a9961e76f2d285dc6991e8e48893503cc3836a4755bbc2d40bcc272a441
+          name: immich-postgres
+          resources: {}
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: immich-pgdata
+      restartPolicy: Always
+      volumes:
+        - name: immich-pgdata
+          persistentVolumeClaim:
+            claimName: immich-pgdata
+status: {}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  name: immich-machine-learning
+  namespace: immich
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-machine-learning
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-machine-learning
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/immich-machine-learning:release
+          imagePullPolicy: Always
+          name: immich-machine-learning
+          resources: {}
+          ports:
+            - containerPort: 3003
+              name: "web"
+          volumeMounts:
+            - mountPath: /cache
+              name: immich-model-cache
+      restartPolicy: Always
+      volumes:
+        - name: immich-model-cache
+          persistentVolumeClaim:
+            claimName: immich-model-cache
+status: {}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  name: immich-proxy
+  namespace: immich
+spec:
+  replicas: 1
+  strategy: {}
+  selector:
+    matchLabels:
+      app: immich-proxy
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-proxy
+    spec:
+      containers:
+        - args: 
+          env:
+            - name: IMMICH_SERVER_URL
+              value: "http://immich-server.immich.svc:3001"
+            - name: IMMICH_WEB_URL
+              value: "http://immich-web.immich.svc:3000"
+          image: ghcr.io/immich-app/immich-proxy:release
+          imagePullPolicy: Always
+          name: immich-proxy
+          ports:
+            - containerPort: 8080
+              hostPort: 2283
+              protocol: TCP
+          resources: {}
+      restartPolicy: Always
+status: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  name: immich-server
+  namespace: immich
+  labels:
+    app: immich-server
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: immich-server
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-server
+    spec:
+      containers:
+        - args:
+            - start.sh
+            - immich
+          env:
+            - name: DB_USERNAME
+              value: "postgres"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: password
+            - name: DB_DATABASE_NAME
+              value: "immich"
+            - name: TYPESENSE_API_KEY
+              value: "some-random-text"
+            - name: TYPESENSE_HOST
+              value: "immich-typesense.immich.svc"
+            - name: TZ
+              value: "America/New_York"
+            - name: DB_HOSTNAME
+              value: "immich-database.immich.svc"
+            - name: REDIS_HOSTNAME
+              value: "immich-redis.immich.svc"
+            - name: IMMICH_MACHINE_LEARNING_URL
+              value: http://immich-machine-learning.immich.svc:3003
+          ports:
+            - containerPort: 3001
+              name: http
+              protocol: TCP
+          image: ghcr.io/immich-app/immich-server:release
+          imagePullPolicy: Always
+          name: immich-server
+          resources: {}
+          volumeMounts:
+            - mountPath: /usr/src/app/upload
+              name: immich-uploads
+            - mountPath: /Volumes/homes/pasmith19/Photos
+              name: immich-pasmith19-photos
+              readOnly: true
+            - mountPath: /Volumes/homes/dhruvb14/Photos
+              name: immich-dhruvb14-photos
+              readOnly: true
+      restartPolicy: Always
+      volumes:
+        - name: immich-uploads
+          nfs:
+            server: 192.168.1.10
+            path: /volume2/docker/immich
+            readOnly: false
+        - name: immich-pasmith19-photos
+          nfs:
+            server: 192.168.1.10
+            path: /volume2/homes/pasmith19/Photos
+            readOnly: true
+        - name: immich-dhruvb14-photos
+          nfs:
+            server: 192.168.1.10
+            path: /volume2/homes/dhruvb14/Photos
+            readOnly: true
+status: {}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  name: immich-web
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich-web
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-web
+    spec:
+      containers:
+        - env:
+            - name: IMMICH_SERVER_URL
+              value: "http://immich-server.immich.svc:3001"
+          image: ghcr.io/immich-app/immich-web:release
+          imagePullPolicy: Always
+          name: immich-web
+          resources: {}
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+      restartPolicy: Always
+status: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: redis
+  name: immich-redis
+  namespace: immich
+spec:
+  replicas: 1
+  strategy: {}
+  selector:
+    matchLabels:
+      app: immich-redis
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-redis
+    spec:
+      containers:
+        - image: redis:6.2-alpine@sha256:70a7a5b641117670beae0d80658430853896b5ef269ccf00d1827427e3263fa3
+          name: immich-redis
+          resources: {}
+      restartPolicy: Always
+status: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+  creationTimestamp: null
+  name: immich-typesense
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich-typesense
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+          app: immich-typesense
+      creationTimestamp: null
+    spec:
+      containers:
+        - env:
+            - name: TYPESENSE_API_KEY
+              value: "some-random-text"
+            - name: TYPESENSE_DATA_DIR
+              value: "/data"
+          image: typesense/typesense:0.24.1@sha256:9bcff2b829f12074426ca044b56160ca9d777a0c488303469143dd9f8259d4dd
+          name: immich-typesense
+          resources: {}
+          volumeMounts:
+            - mountPath: /data
+              name: immich-tsdata
+      restartPolicy: Always
+      volumes:
+        - name: immich-tsdata
+          persistentVolumeClaim:
+            claimName: immich-tsdata
+status: {}
+
+---
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: immich-microservices
+  name: immich-microservices
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich-microservices
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: immich-microservices
+    spec:
+      containers:
+        - args:
+            - start.sh
+            - microservices
+          env:
+            - name: DB_USERNAME
+              value: "postgres"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres
+                  key: password
+            - name: DB_DATABASE_NAME
+              value: "immich"
+            - name: TYPESENSE_API_KEY
+              value: "some-random-text"
+            - name: TYPESENSE_HOST
+              value: "immich-typesense.immich.svc"
+            - name: REDIS_HOSTNAME
+              value: "immich-redis.immich.svc"
+            - name: TZ
+              value: "America/New_York"
+            - name: DB_HOSTNAME
+              value: "immich-database.immich.svc"
+          image: ghcr.io/immich-app/immich-server:release
+          imagePullPolicy: Always
+          name: immich-microservices
+          resources: {}
+          volumeMounts:
+            - mountPath: /usr/src/app/upload
+              name: immich-uploads
+            - mountPath: /Volumes/homes/pasmith19/Photos
+              name: immich-pasmith19-photos
+              readOnly: true
+            - mountPath: /Volumes/homes/dhruvb14/Photos
+              name: immich-dhruvb14-photos
+              readOnly: true
+      restartPolicy: Always
+      volumes:
+        - name: immich-uploads
+          nfs:
+            server: 192.168.1.10
+            path: /volume2/docker/immich
+            readOnly: false
+        - name: immich-pasmith19-photos
+          nfs:
+            server: 192.168.1.10
+            path: /volume2/homes/pasmith19/Photos
+            readOnly: true
+        - name: immich-dhruvb14-photos
+          nfs:
+            server: 192.168.1.10
+            path: /volume2/homes/dhruvb14/Photos
+            readOnly: true
+status: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tools
+  namespace: immich
+spec:
+  selector:
+    matchLabels:
+      app: tools
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: tools
+    spec:
+      containers:
+        - name: tools
+          image: debian
+          command: [ "/bin/bash", "-c", "--" ]
+          args: [ "while true; do sleep 30; done;" ]
