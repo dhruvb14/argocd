@@ -126,12 +126,12 @@ spec:
           imagePullPolicy: Always
           name: immich-machine-learning
           resources:
-          limits:
-            cpu: "2000m"
-            memory: "2048Mi"
-          requests:
-            cpu: "1000m"
-            memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2048Mi"
+            requests:
+              cpu: "1000m"
+              memory: "512Mi"
           ports:
             - containerPort: 3003
               name: "web"
