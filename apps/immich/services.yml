@@ -145,3 +145,23 @@ spec:
   type: ClusterIP
 status:
   loadBalancer: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: immich-microservices
+  name: immich-microservices
+  namespace: immich
+spec:
+  ports:
+    - name: "http"
+      port: 3002
+      targetPort: 3002
+  selector:
+    app: immich-microservices
+  type: ClusterIP
+status:
+  loadBalancer: {}
