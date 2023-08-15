@@ -125,7 +125,13 @@ spec:
         - image: ghcr.io/immich-app/immich-machine-learning:release
           imagePullPolicy: Always
           name: immich-machine-learning
-          resources: {}
+          resources:
+          limits:
+            cpu: "2000m"
+            memory: "2048Mi"
+          requests:
+            cpu: "1000m"
+            memory: "512Mi"
           ports:
             - containerPort: 3003
               name: "web"
